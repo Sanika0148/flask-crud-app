@@ -1,24 +1,43 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, flash
+import sqlite3
 
-from flask_mysqldb import MySQL
 app = Flask(__name__)
-app.secret_key="flash message"
-
-app.config['MYSQL_HOST'] = 'localhost'
-app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = ''
-app.config['MYSQL_DB'] = 'crudapplication'
-
-mysql = MySQL(app)
+app.secret_key = "flash message"
 
 
+# 🔹 Database connection function
+def get_db_connection():
+    conn = sqlite3.connect('database.db')
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+# 🔹 Table create (first time)
+conn = sqlite3.connect('database.db')
+cursor = conn.cursor()
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS students (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    email TEXT,
+    phone TEXT
+)
+''')
+conn.commit()
+conn.close()
+
+
+# 🔹 Home route
 @app.route('/')
 def Index():
-    cur = mysql.connection.cursor()
-    cur.execute("SELECT * FROM students")
-    data = cur.fetchall()
+    conn = get_db_connection()
+    data = conn.execute("SELECT * FROM students").fetchall()
+    conn.close()
     count = len(data)
-    return render_template('index.html', students=data,count=count)
+    return render_template('index.html', students=data, count=count)
+
+
+# 🔹 Insert
 @app.route('/insert', methods=['POST'])
 def insert():
     if request.method == 'POST':
@@ -26,48 +45,50 @@ def insert():
         email = request.form['email']
         phone = request.form['phone']
 
-        cur = mysql.connection.cursor()
-        cur.execute("INSERT INTO students (name, email, phone) VALUES (%s, %s, %s)", (name, email, phone))
-        mysql.connection.commit()
-        flash("Data inserted successfully!")
+        conn = get_db_connection()
+        conn.execute(
+            "INSERT INTO students (name, email, phone) VALUES (?, ?, ?)",
+            (name, email, phone)
+        )
+        conn.commit()
+        conn.close()
 
+        flash("Data inserted successfully!")
         return redirect('/')
+
+
+# 🔹 Update
 @app.route('/update', methods=['POST'])
 def update():
     if request.method == 'POST':
-        id_data= request.form['id']
+        id_data = request.form['id']
         name = request.form['name']
         email = request.form['email']
         phone = request.form['phone']
 
-        cur = mysql.connection.cursor()
-        cur.execute("""
-            UPDATE students 
-            SET name=%s, email=%s, phone=%s 
-            WHERE id=%s
-        """, (name, email, phone, id_data))
+        conn = get_db_connection()
+        conn.execute(
+            "UPDATE students SET name=?, email=?, phone=? WHERE id=?",
+            (name, email, phone, id_data)
+        )
+        conn.commit()
+        conn.close()
+
         flash("Data updated successfully!")
-
-        mysql.connection.commit()
-
         return redirect('/')
 
+
+# 🔹 Delete
 @app.route('/delete/<int:id>', methods=['GET'])
 def delete(id):
-        cur = mysql.connection.cursor()
-        cur.execute("DELETE FROM students WHERE id=%s", (id,))
-        flash("Data Deleted Successfully!")
-        mysql.connection.commit()
+    conn = get_db_connection()
+    conn.execute("DELETE FROM students WHERE id=?", (id,))
+    conn.commit()
+    conn.close()
 
-
-        return redirect('/')
+    flash("Data Deleted Successfully!")
+    return redirect('/')
 
 
 if __name__ == "__main__":
-        app.run(debug=True)
-
-
-
-
-
-
+    app.run(debug=True)
